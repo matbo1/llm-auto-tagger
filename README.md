@@ -1,6 +1,6 @@
-# Auto Tagger
+# LLM Auto Tagger
 
-Auto Tagger is an Obsidian plugin that uses an LLM to automatically add existing vault tags to Markdown notes.
+LLM Auto Tagger is an Obsidian plugin that uses your configured LLM API to automatically add existing vault tags to Markdown notes.
 
 It is designed for vaults that already have a tag system. The plugin reads the tags that exist in your vault, asks your configured LLM to choose suitable tags from that list, and writes only matching tags back to the note frontmatter.
 
@@ -41,7 +41,7 @@ Use the `Test connection` button before relying on automatic tagging. It sends a
 
 ## Privacy
 
-Auto Tagger sends note content to the LLM provider you configure. API keys are stored locally in Obsidian plugin settings.
+LLM Auto Tagger sends note content to the LLM provider you configure. API keys are stored locally in Obsidian plugin settings.
 
 Before using the plugin with private notes, review the privacy, billing, data usage, and retention terms of your selected provider.
 
@@ -59,7 +59,7 @@ Use a model name such as:
 gemini-2.5-flash
 ```
 
-If you enter a model name with a `models/` prefix, Auto Tagger normalizes it automatically.
+If you enter a model name with a `models/` prefix, LLM Auto Tagger normalizes it automatically.
 
 When testing a Gemini connection, the plugin first checks whether the configured model supports `generateContent`. If the API key works but the model is unavailable, it suggests available model names.
 
@@ -68,7 +68,7 @@ When testing a Gemini connection, the plugin first checks whether the configured
 Copy this folder into:
 
 ```text
-YourVault/.obsidian/plugins/auto-tagger/
+YourVault/.obsidian/plugins/llm-auto-tagger/
 ```
 
 The plugin folder should contain:
@@ -79,7 +79,7 @@ main.js
 styles.css
 ```
 
-Then enable Auto Tagger in Obsidian's community plugin settings.
+Then enable LLM Auto Tagger in Obsidian's community plugin settings.
 
 ## License
 

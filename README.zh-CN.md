@@ -1,6 +1,6 @@
-# Auto Tagger
+# LLM Auto Tagger
 
-Auto Tagger 是一个 Obsidian 插件，可以通过 LLM 自动为 Markdown 笔记追加已有 vault 标签。
+LLM Auto Tagger 是一个 Obsidian 插件，可以通过你配置的 LLM API 自动为 Markdown 笔记追加已有 vault 标签。
 
 它适合已经建立了标签体系的 vault。插件会读取当前 vault 中已经存在的标签，让你配置的 LLM 从这些标签中选择适合当前笔记的标签，并只把匹配到的已有标签写回笔记 frontmatter。
 
@@ -41,7 +41,7 @@ Auto Tagger 是一个 Obsidian 插件，可以通过 LLM 自动为 Markdown 笔�
 
 ## 隐私说明
 
-Auto Tagger 会把笔记内容发送给你配置的 LLM 服务商。API Key 会保存在 Obsidian 本地插件设置中。
+LLM Auto Tagger 会把笔记内容发送给你配置的 LLM 服务商。API Key 会保存在 Obsidian 本地插件设置中。
 
 在处理私人笔记前，请先确认所选服务商的隐私政策、计费规则、数据使用方式和数据保留条款。
 
@@ -59,7 +59,7 @@ https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent
 gemini-2.5-flash
 ```
 
-如果模型名前带有 `models/` 前缀，Auto Tagger 会自动兼容并移除该前缀。
+如果模型名前带有 `models/` 前缀，LLM Auto Tagger 会自动兼容并移除该前缀。
 
 测试 Gemini 连接时，插件会先检查当前模型是否支持 `generateContent`。如果 API Key 可用但模型不可用，插件会提示可尝试的模型名。
 
@@ -68,7 +68,7 @@ gemini-2.5-flash
 将本插件目录复制到：
 
 ```text
-你的Vault/.obsidian/plugins/auto-tagger/
+你的Vault/.obsidian/plugins/llm-auto-tagger/
 ```
 
 插件目录中应包含：
@@ -79,7 +79,7 @@ main.js
 styles.css
 ```
 
-复制完成后，在 Obsidian 的社区插件设置中启用 Auto Tagger。
+复制完成后，在 Obsidian 的社区插件设置中启用 LLM Auto Tagger。
 
 ## 许可证
 
