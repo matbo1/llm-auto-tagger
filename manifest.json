@@ -1,0 +1,10 @@
+{
+  "id": "auto-tagger",
+  "name": "Auto Tagger",
+  "version": "1.0.0",
+  "minAppVersion": "1.5.0",
+  "description": "Automatically adds existing vault tags to notes with an LLM.",
+  "author": "Matboi",
+  "authorUrl": "",
+  "isDesktopOnly": false
+}

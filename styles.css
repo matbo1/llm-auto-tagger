@@ -1,0 +1,64 @@
+.auto-tagger-required-dot {
+  color: var(--text-error);
+  font-size: 0.45em;
+  font-weight: 700;
+  margin-left: 4px;
+  vertical-align: super;
+}
+
+.auto-tagger-test-result {
+  color: var(--text-muted);
+  margin-top: 6px;
+}
+
+.auto-tagger-test-result-success {
+  color: var(--text-success);
+  font-weight: 600;
+}
+
+.auto-tagger-test-result-error {
+  color: var(--text-error);
+  font-weight: 600;
+}
+
+.auto-tagger-test-result-testing {
+  color: var(--text-accent);
+  font-weight: 600;
+}
+
+.auto-tagger-test-setting {
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 8px;
+  margin: 12px 0;
+  padding: 12px;
+}
+
+.auto-tagger-provider-module {
+  background: var(--background-secondary);
+  border-radius: 8px;
+  margin: 12px 0;
+  padding: 12px;
+}
+
+.auto-tagger-provider-divider {
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 10px 0;
+}
+
+.auto-tagger-provider-shortcut {
+  align-items: center;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+
+.auto-tagger-provider-shortcut-desc {
+  color: var(--text-muted);
+  font-size: var(--font-ui-smaller);
+  line-height: 1.4;
+  min-width: 0;
+}
+
+.auto-tagger-provider-shortcut button {
+  flex: none;
+}
