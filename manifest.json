@@ -1,7 +1,7 @@
 {
   "id": "llm-auto-tagger",
   "name": "LLM Auto Tagger",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "minAppVersion": "1.5.0",
   "description": "Automatically adds existing vault tags to notes with your configured LLM API.",
   "author": "Matboi",
