@@ -13,6 +13,8 @@ It is designed for vaults that already have a tag system. The plugin reads the t
 - Keeps existing tags and other frontmatter fields.
 - Supports OpenAI-compatible APIs, OpenAI, Anthropic Claude, Google Gemini, and common China provider presets.
 - Provides a connection test for checking your API URL, API key, and model settings.
+- Provides a bulk update action that scans every Markdown note in the current vault, updates tags serially, shows resumable progress in the settings panel, and supports cancellation.
+- Bulk update statistics separate updated notes, notes with no new tags, and exceptions.
 
 ## Supported Providers
 
@@ -38,6 +40,16 @@ It is designed for vaults that already have a tag system. The plugin reads the t
 Required fields are marked with a red dot in the settings page.
 
 Use the `Test connection` button before relying on automatic tagging. It sends a minimal request to verify that the configured provider can be reached.
+
+## Bulk Update Status
+
+Bulk update uses these result groups:
+
+- Updated: tags were appended to the note.
+- No new tags: the note was processed successfully, but the model returned no valid tags that were not already present.
+- Exceptions: the note could not be processed, for example because the content was too short, no candidate tags were available, the file was already being processed, or the provider request failed.
+
+Incomplete provider configuration is checked before the bulk task starts. If required settings are missing, the settings page shows the missing fields and no files are processed.
 
 ## Privacy
 
@@ -65,7 +77,7 @@ When testing a Gemini connection, the plugin first checks whether the configured
 
 ## Local Installation
 
-Copy this folder into:
+Copy the contents of this folder into:
 
 ```text
 YourVault/.obsidian/plugins/llm-auto-tagger/

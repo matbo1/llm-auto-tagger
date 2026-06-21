@@ -13,6 +13,8 @@ LLM Auto Tagger 是一个 Obsidian 插件，可以通过你配置的 LLM API 自
 - 保留笔记已有标签和其他 frontmatter 字段。
 - 支持 OpenAI-compatible API、OpenAI、Anthropic Claude、Google Gemini，以及常见国内厂商预设。
 - 提供连接测试，用于检查 API URL、API Key 和模型设置是否可用。
+- 提供批量更新功能，可以遍历当前仓库中的所有 Markdown 文档，串行更新标签，在设置页显示可恢复的进度，并支持取消。
+- 批量更新统计会区分已更新、无新增标签和异常。
 
 ## 支持的 Provider
 
@@ -38,6 +40,16 @@ LLM Auto Tagger 是一个 Obsidian 插件，可以通过你配置的 LLM API 自
 设置页中带红点的字段是必填项。
 
 建议先在插件设置页点击 `Test connection`，确认当前 Provider 可以正常连接后，再依赖自动打标签。
+
+## 批量更新状态
+
+批量更新使用以下结果分类：
+
+- 已更新：已向文档追加标签。
+- 无新增标签：文档处理成功，但模型没有返回可追加的新标签。
+- 异常：文档无法正常处理，例如正文过短、没有候选标签、文件正在处理中，或厂商请求失败。
+
+Provider 配置完整性会在批量任务开始前校验。若缺少必填项，设置页会提示缺失字段，并且不会开始遍历文件。
 
 ## 隐私说明
 
@@ -65,7 +77,7 @@ gemini-2.5-flash
 
 ## 本地安装
 
-将本插件目录复制到：
+将本目录中的内容复制到：
 
 ```text
 你的Vault/.obsidian/plugins/llm-auto-tagger/

@@ -162,6 +162,23 @@ const UI_TEXT = {
     connectionFailed: "Connection failed",
     geminiModelMissing: (model, suggestions) =>
       `Gemini API key works, but model "${model}" was not found for generateContent. Try: ${suggestions.join(", ")}`,
+    bulkName: "Bulk update note tags",
+    bulkStart: "Update all note tags",
+    bulkCancel: "Cancel",
+    bulkCancelling: "Cancelling after the current note finishes...",
+    bulkReady: "Ready to update all Markdown notes.",
+    bulkRunning: "Updating all note tags...",
+    bulkAlreadyRunning: "A bulk update is already running.",
+    bulkNoMarkdown: "No Markdown notes found in the current vault.",
+    bulkNoCandidateTags: "No existing vault tags found. Add tags before bulk updating.",
+    bulkDone: (summary) =>
+      `Done. Updated ${summary.updated}, no new tags ${summary.noNewTags}, exceptions ${summary.exception}.`,
+    bulkCancelled: (summary) =>
+      `Cancelled. Processed ${summary.processed}/${summary.total}. Updated ${summary.updated}, no new tags ${summary.noNewTags}, exceptions ${summary.exception}.`,
+    bulkProgress: (summary) =>
+      `Processed ${summary.processed}/${summary.total} (${getProgressPercent(summary)}%). Updated ${summary.updated}, no new tags ${summary.noNewTags}, exceptions ${summary.exception}.`,
+    bulkCurrent: (path) => `Current: ${path}`,
+    bulkLastError: (error) => `Last error: ${error}`,
     apiUrl: "LLM API URL",
     apiUrlDesc: (label) => `${label} endpoint.`,
     useDefault: "Use default",
@@ -200,6 +217,23 @@ const UI_TEXT = {
     connectionFailed: "连接失败",
     geminiModelMissing: (model, suggestions) =>
       `Gemini API Key 可用，但当前模型「${model}」不支持 generateContent 或未在模型列表中找到。可尝试：${suggestions.join(", ")}`,
+    bulkName: "批量更新文档标签",
+    bulkStart: "更新全部文档标签",
+    bulkCancel: "取消",
+    bulkCancelling: "当前文档处理完成后将取消...",
+    bulkReady: "准备更新所有 Markdown 文档标签。",
+    bulkRunning: "正在更新全部文档标签...",
+    bulkAlreadyRunning: "批量更新正在运行。",
+    bulkNoMarkdown: "当前仓库中没有 Markdown 文档。",
+    bulkNoCandidateTags: "当前仓库中没有已有标签。请先添加标签后再批量更新。",
+    bulkDone: (summary) =>
+      `已完成。已更新 ${summary.updated}，无新增标签 ${summary.noNewTags}，异常 ${summary.exception}。`,
+    bulkCancelled: (summary) =>
+      `已取消。已处理 ${summary.processed}/${summary.total}。已更新 ${summary.updated}，无新增标签 ${summary.noNewTags}，异常 ${summary.exception}。`,
+    bulkProgress: (summary) =>
+      `已处理 ${summary.processed}/${summary.total}（${getProgressPercent(summary)}%）。已更新 ${summary.updated}，无新增标签 ${summary.noNewTags}，异常 ${summary.exception}。`,
+    bulkCurrent: (path) => `当前文档：${path}`,
+    bulkLastError: (error) => `最后错误：${error}`,
     apiUrl: "LLM API URL",
     apiUrlDesc: (label) => `${label} 接口地址。`,
     useDefault: "使用默认值",
@@ -226,6 +260,9 @@ module.exports = class AutoTaggerLLMPlugin extends Plugin {
     this.debounceTimers = new Map();
     this.processingFiles = new Set();
     this.pluginWriteIgnoreUntil = new Map();
+    this.bulkTaggingActive = false;
+    this.bulkTaggingCancelRequested = false;
+    this.bulkTaggingSummary = null;
 
     this.addSettingTab(new AutoTaggerSettingTab(this.app, this));
 
@@ -244,6 +281,9 @@ module.exports = class AutoTaggerLLMPlugin extends Plugin {
     this.debounceTimers.clear();
     this.processingFiles.clear();
     this.pluginWriteIgnoreUntil.clear();
+    this.bulkTaggingCancelRequested = true;
+    this.bulkTaggingActive = false;
+    this.bulkTaggingSummary = null;
   }
 
   async loadSettings() {
@@ -277,8 +317,24 @@ module.exports = class AutoTaggerLLMPlugin extends Plugin {
     await this.saveData(this.settings);
   }
 
+  clearDebounceTimers() {
+    for (const timer of this.debounceTimers.values()) {
+      clearTimeout(timer);
+    }
+
+    this.debounceTimers.clear();
+  }
+
   handleFileModify(file) {
+    if (this.bulkTaggingActive) {
+      return;
+    }
+
     if (!this.settings.autoTaggingEnabled) {
+      return;
+    }
+
+    if (!this.isReadyForRequests()) {
       return;
     }
 
@@ -307,18 +363,14 @@ module.exports = class AutoTaggerLLMPlugin extends Plugin {
     this.debounceTimers.set(file.path, timer);
   }
 
-  async autoTagFileByPath(path) {
-    if (!this.isReadyForRequests()) {
-      return;
-    }
-
+  async autoTagFileByPath(path, options = {}) {
     if (this.processingFiles.has(path)) {
-      return;
+      return { status: "exception", reason: "already-processing" };
     }
 
     const file = this.app.vault.getAbstractFileByPath(path);
     if (!(file instanceof TFile) || file.extension !== "md") {
-      return;
+      return { status: "exception", reason: "not-markdown" };
     }
 
     this.processingFiles.add(path);
@@ -331,12 +383,12 @@ module.exports = class AutoTaggerLLMPlugin extends Plugin {
       );
 
       if (noteContent.length < this.settings.minContentCharacters) {
-        return;
+        return { status: "exception", reason: "short-content" };
       }
 
-      const candidateTags = this.getVaultTags();
+      const candidateTags = options.candidateTags || this.getVaultTags();
       if (candidateTags.length === 0) {
-        return;
+        return { status: "exception", reason: "no-candidate-tags" };
       }
 
       const currentTags = this.getCurrentNoteTags(file);
@@ -353,13 +405,134 @@ module.exports = class AutoTaggerLLMPlugin extends Plugin {
       );
 
       if (newTags.length === 0) {
-        return;
+        return { status: "no-new-tags", reason: "no-new-tags" };
       }
 
       await this.writeTagsToFrontmatter(file, newTags);
+      return { status: "updated", tags: newTags };
+    } catch (error) {
+      if (options.catchErrors) {
+        return {
+          status: "exception",
+          reason: getErrorMessage(error)
+        };
+      }
+
+      throw error;
     } finally {
       this.processingFiles.delete(path);
     }
+  }
+
+  requestBulkTaggingCancel() {
+    if (this.bulkTaggingActive) {
+      this.bulkTaggingCancelRequested = true;
+    }
+  }
+
+  getBulkTaggingSummary() {
+    return this.bulkTaggingSummary;
+  }
+
+  async runBulkTagging(onProgress) {
+    if (this.bulkTaggingActive) {
+      return {
+        total: 0,
+        processed: 0,
+        updated: 0,
+        noNewTags: 0,
+        exception: 0,
+        cancelled: false,
+        alreadyRunning: true,
+        active: true,
+        lastError: ""
+      };
+    }
+
+    if (!this.isReadyForRequests()) {
+      throw new Error(this.getMissingRequiredMessage());
+    }
+
+    const files = this.app.vault
+      .getMarkdownFiles()
+      .slice()
+      .sort((a, b) => a.path.localeCompare(b.path));
+    const summary = {
+      total: files.length,
+      processed: 0,
+      updated: 0,
+      noNewTags: 0,
+      exception: 0,
+      cancelled: false,
+      currentPath: "",
+      lastError: "",
+      alreadyRunning: false,
+      noMarkdown: files.length === 0,
+      noCandidateTags: false,
+      active: true
+    };
+
+    this.bulkTaggingActive = true;
+    this.bulkTaggingCancelRequested = false;
+    this.clearDebounceTimers();
+
+    try {
+      this.updateBulkTaggingSummary(summary, onProgress);
+
+      if (summary.noMarkdown) {
+        summary.active = false;
+        this.updateBulkTaggingSummary(summary, onProgress);
+        return summary;
+      }
+
+      const candidateTags = this.getVaultTags();
+      if (candidateTags.length === 0) {
+        summary.noCandidateTags = true;
+        summary.active = false;
+        this.updateBulkTaggingSummary(summary, onProgress);
+        return summary;
+      }
+
+      for (const file of files) {
+        if (this.bulkTaggingCancelRequested) {
+          summary.cancelled = true;
+          break;
+        }
+
+        summary.currentPath = file.path;
+        this.updateBulkTaggingSummary(summary, onProgress);
+
+        const result = await this.autoTagFileByPath(file.path, {
+          candidateTags,
+          catchErrors: true
+        });
+
+        if (result.status === "updated") {
+          summary.updated += 1;
+        } else if (result.status === "no-new-tags") {
+          summary.noNewTags += 1;
+        } else {
+          summary.exception += 1;
+          summary.lastError = result.reason || "";
+        }
+
+        summary.processed += 1;
+        summary.currentPath = "";
+        this.updateBulkTaggingSummary(summary, onProgress);
+      }
+
+      summary.active = false;
+      this.updateBulkTaggingSummary(summary, onProgress);
+      return summary;
+    } finally {
+      this.bulkTaggingActive = false;
+      this.bulkTaggingCancelRequested = false;
+    }
+  }
+
+  updateBulkTaggingSummary(summary, onProgress) {
+    this.bulkTaggingSummary = Object.assign({}, summary);
+    onProgress && onProgress(this.getBulkTaggingSummary());
   }
 
   isReadyForRequests() {
@@ -708,6 +881,122 @@ class AutoTaggerSettingTab extends PluginSettingTab {
       );
     };
     updateStatus();
+
+    let bulkStartButton = null;
+    let bulkCancelButton = null;
+    const updateBulkControls = (summary) => {
+      const active = Boolean(summary && summary.active);
+
+      if (bulkStartButton) {
+        bulkStartButton.buttonEl.style.display = active ? "none" : "";
+        bulkStartButton.setDisabled(false);
+      }
+
+      if (bulkCancelButton) {
+        bulkCancelButton.buttonEl.style.display = active ? "" : "none";
+        bulkCancelButton.setDisabled(false);
+        bulkCancelButton.setButtonText(text.bulkCancel);
+      }
+    };
+    const renderBulkSummary = (summary) => {
+      setBulkProgress(bulkProgressEl, summary);
+
+      if (!summary) {
+        setBulkStatus(bulkStatusEl, "idle", text.bulkReady);
+        updateBulkControls(summary);
+        return;
+      }
+
+      if (summary.active) {
+        setBulkStatus(
+          bulkStatusEl,
+          "testing",
+          getBulkProgressMessage(summary, text)
+        );
+        updateBulkControls(summary);
+        return;
+      }
+
+      if (summary.alreadyRunning) {
+        setBulkStatus(bulkStatusEl, "error", text.bulkAlreadyRunning);
+      } else if (summary.noMarkdown) {
+        setBulkStatus(bulkStatusEl, "error", text.bulkNoMarkdown);
+      } else if (summary.noCandidateTags) {
+        setBulkStatus(bulkStatusEl, "error", text.bulkNoCandidateTags);
+      } else if (summary.cancelled) {
+        setBulkStatus(
+          bulkStatusEl,
+          "idle",
+          getBulkFinalMessage(summary, text)
+        );
+      } else {
+        setBulkStatus(
+          bulkStatusEl,
+          summary.exception ? "error" : "success",
+          getBulkFinalMessage(summary, text)
+        );
+      }
+
+      updateBulkControls(summary);
+    };
+    const bulkSetting = new Setting(containerEl)
+      .setName(text.bulkName)
+      .addButton((button) => {
+        bulkStartButton = button;
+        button
+          .setButtonText(text.bulkStart)
+          .onClick(async () => {
+            if (!this.plugin.isReadyForRequests()) {
+              setBulkStatus(
+                bulkStatusEl,
+                "error",
+                getMissingRequiredMessage(this.plugin, text)
+              );
+              return;
+            }
+
+            updateBulkControls({ active: true });
+            setBulkProgress(bulkProgressEl, {
+              total: 0,
+              processed: 0
+            });
+            setBulkStatus(bulkStatusEl, "testing", text.bulkRunning);
+
+            try {
+              const summary = await this.plugin.runBulkTagging((progress) => {
+                renderBulkSummary(progress);
+              });
+
+              renderBulkSummary(summary);
+            } catch (error) {
+              setBulkStatus(bulkStatusEl, "error", getErrorMessage(error));
+            } finally {
+              updateBulkControls(this.plugin.getBulkTaggingSummary());
+            }
+          });
+      })
+      .addButton((button) => {
+        bulkCancelButton = button;
+        button
+          .setButtonText(text.bulkCancel)
+          .onClick(() => {
+            this.plugin.requestBulkTaggingCancel();
+            button.setDisabled(true);
+            button.setButtonText(text.bulkCancelling);
+            setBulkStatus(bulkStatusEl, "testing", text.bulkCancelling);
+          });
+        button.buttonEl.style.display = "none";
+      });
+    const bulkProgressEl = bulkSetting.descEl.createEl("progress", {
+      cls: "auto-tagger-bulk-progress"
+    });
+    bulkProgressEl.max = 100;
+    bulkProgressEl.value = 0;
+    const bulkStatusEl = bulkSetting.descEl.createDiv({
+      cls: "auto-tagger-bulk-status"
+    });
+    bulkSetting.settingEl.addClass("auto-tagger-bulk-setting");
+    renderBulkSummary(this.plugin.getBulkTaggingSummary());
 
     const testSetting = new Setting(containerEl)
       .setName(text.testName)
@@ -1133,6 +1422,63 @@ function getMissingRequiredMessage(plugin, text) {
     ? text.requiredSuffix
     : text.requiredSuffixPlural;
   return `${missing.join(", ")} ${suffix}`;
+}
+
+function getProgressPercent(summary) {
+  if (!summary || !summary.total) {
+    return 0;
+  }
+
+  return Math.round((summary.processed / summary.total) * 100);
+}
+
+function setBulkProgress(element, summary) {
+  if (!summary || !summary.total) {
+    element.style.display = "none";
+    element.value = 0;
+    return;
+  }
+
+  element.style.display = "";
+  element.value = getProgressPercent(summary);
+}
+
+function setBulkStatus(element, status, message) {
+  element.removeClass("auto-tagger-bulk-status-success");
+  element.removeClass("auto-tagger-bulk-status-error");
+  element.removeClass("auto-tagger-bulk-status-testing");
+
+  if (status !== "idle") {
+    element.addClass(`auto-tagger-bulk-status-${status}`);
+  }
+
+  element.setText(message);
+}
+
+function getBulkProgressMessage(summary, text) {
+  const lines = [text.bulkProgress(summary)];
+
+  if (summary.currentPath) {
+    lines.push(text.bulkCurrent(summary.currentPath));
+  }
+
+  if (summary.lastError) {
+    lines.push(text.bulkLastError(summary.lastError));
+  }
+
+  return lines.join("\n");
+}
+
+function getBulkFinalMessage(summary, text) {
+  const lines = [
+    summary.cancelled ? text.bulkCancelled(summary) : text.bulkDone(summary)
+  ];
+
+  if (summary.lastError) {
+    lines.push(text.bulkLastError(summary.lastError));
+  }
+
+  return lines.join("\n");
 }
 
 function setTestResult(element, status, message, text) {
